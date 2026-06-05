@@ -52,12 +52,14 @@ Issue (#)
 
 ## 镜像与 registry
 
-- registry 为 Aliyun ACR：`${ACR_REGISTRY}/${ACR_NAMESPACE}/${ACR_REPOSITORY}`。
-- 两个服务**共用一个 repository**，按服务前缀区分 tag：
-  - api：`${ACR_REPOSITORY}:api-<40位SHA>`
-  - cook-web：`${ACR_REPOSITORY}:cook-web-<40位SHA>`
-- registry / namespace / repository 由 GitHub Variables 提供，凭据由 Secrets 提供（见下）。
-- 生产镜像 tag **始终内嵌完整 40 位 commit SHA**，不使用 `latest` 或短 SHA。部署输入仍为纯 40 位 SHA，镜像 tag 由部署脚本按服务前缀派生。
+- registry 为 Aliyun ACR：`${ACR_REGISTRY}/${ACR_NAMESPACE}/<service>-lmzj`。
+- 命名规范：**每个服务一个独立 repository**，名为 `服务-lmzj`：
+  - api：`api-lmzj:<40位SHA>`
+  - cook-web：`cook-web-lmzj:<40位SHA>`
+- registry / namespace 由 GitHub Variables 提供；repository 名由 workflow 按规范固定（`api-lmzj`、`cook-web-lmzj`）。凭据由 Secrets 提供（见下）。
+- 生产镜像 tag **只用完整 40 位 commit SHA**，不使用 `latest` 或短 SHA。
+
+需在 Aliyun ACR namespace `lmzjai` 下创建两个 repository：`api-lmzj`、`cook-web-lmzj`。
 
 ## 需要人类在 GitHub 配置的 L4 平台门禁
 
@@ -86,7 +88,6 @@ Issue (#)
 |---|---|---|---|
 | Variable | `ACR_REGISTRY` | `registry.cn-chengdu.aliyuncs.com` | ACR registry host |
 | Variable | `ACR_NAMESPACE` | `lmzjai` | ACR namespace |
-| Variable | `ACR_REPOSITORY` | `ragflow-lmzj` | 两镜像共用的 ACR repository |
 | Secret | `ALIYUN_ACR_USERNAME` | — | ACR 用户名 |
 | Secret | `ALIYUN_ACR_PASSWORD` | — | ACR 密码/token |
 | Secret（production env） | `PROD_SSH_HOST` | — | 生产服务器地址 |

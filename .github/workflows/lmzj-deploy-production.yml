@@ -51,7 +51,6 @@ jobs:
             export LMZJ_IMAGE_TAG="${{ github.event.inputs.image_tag }}"
             export ACR_REGISTRY="${{ vars.ACR_REGISTRY }}"
             export ACR_NAMESPACE="${{ vars.ACR_NAMESPACE }}"
-            export ACR_REPOSITORY="${{ vars.ACR_REPOSITORY }}"
             export LMZJ_DEPLOY_PATH="${{ secrets.PROD_DEPLOY_PATH }}"
             echo "${{ secrets.ALIYUN_ACR_PASSWORD }}" | docker login "${ACR_REGISTRY}" -u "${{ secrets.ALIYUN_ACR_USERNAME }}" --password-stdin
             bash "${LMZJ_DEPLOY_PATH}/scripts/deploy-images.sh"

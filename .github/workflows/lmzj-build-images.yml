@@ -98,15 +98,14 @@ jobs:
       matrix:
         include:
           - service_name: api
-            tag_prefix: api
+            repository: api-lmzj
             dockerfile: src/api/Dockerfile
           - service_name: cook-web
-            tag_prefix: cook-web
+            repository: cook-web-lmzj
             dockerfile: src/cook-web/Dockerfile
     env:
       ACR_REGISTRY: ${{ vars.ACR_REGISTRY }}
       ACR_NAMESPACE: ${{ vars.ACR_NAMESPACE }}
-      ACR_REPOSITORY: ${{ vars.ACR_REPOSITORY }}
       ALIYUN_ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
       ALIYUN_ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
     steps:
@@ -137,8 +136,7 @@ jobs:
         if: steps.gate.outputs.build == 'true'
         run: |
           if [ -n "${ACR_REGISTRY}" ] && [ -n "${ACR_NAMESPACE}" ] && \
-             [ -n "${ACR_REPOSITORY}" ] && [ -n "${ALIYUN_ACR_USERNAME}" ] && \
-             [ -n "${ALIYUN_ACR_PASSWORD}" ]; then
+             [ -n "${ALIYUN_ACR_USERNAME}" ] && [ -n "${ALIYUN_ACR_PASSWORD}" ]; then
             echo "PUSH=true" >> "$GITHUB_ENV"
           else
             echo "⚠️ Registry vars/secrets missing; build-only mode (no push)."
@@ -169,7 +167,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: ${{ env.PUSH == 'true' }}
-          tags: ${{ env.PUSH == 'true' && format('{0}/{1}/{2}:{3}-{4}', env.ACR_REGISTRY, env.ACR_NAMESPACE, env.ACR_REPOSITORY, matrix.tag_prefix, github.sha) || '' }}
+          tags: ${{ env.PUSH == 'true' && format('{0}/{1}/{2}:{3}', env.ACR_REGISTRY, env.ACR_NAMESPACE, matrix.repository, github.sha) || '' }}
           labels: |
             ai-shifu.project=lmzj-ai-shifu
             org.opencontainers.image.revision=${{ github.sha }}
@@ -181,8 +179,8 @@ jobs:
         run: |
           echo "### 🐳 lmzj ${{ matrix.service_name }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Image: \`${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ env.ACR_REPOSITORY }}:${{ matrix.tag_prefix }}-${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Tag: \`${{ matrix.tag_prefix }}-${{ github.sha }}\` (service-prefixed full SHA, no latest)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: \`${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ matrix.repository }}:${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: \`${{ github.sha }}\` (full SHA only, no latest)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Push: \`${{ env.PUSH }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   skipped:
