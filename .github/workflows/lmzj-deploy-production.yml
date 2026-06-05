@@ -46,14 +46,14 @@ jobs:
           port: ${{ secrets.PROD_SSH_PORT }}
           username: ${{ secrets.PROD_SSH_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
-          envs: LMZJ_IMAGE_TAG,LMZJ_REGISTRY,LMZJ_IMAGE_NAMESPACE,LMZJ_DEPLOY_PATH
           script_stop: true
           script: |
             export LMZJ_IMAGE_TAG="${{ github.event.inputs.image_tag }}"
-            export LMZJ_REGISTRY="${{ vars.LMZJ_REGISTRY }}"
-            export LMZJ_IMAGE_NAMESPACE="${{ vars.LMZJ_IMAGE_NAMESPACE }}"
+            export ACR_REGISTRY="${{ vars.ACR_REGISTRY }}"
+            export ACR_NAMESPACE="${{ vars.ACR_NAMESPACE }}"
+            export ACR_REPOSITORY="${{ vars.ACR_REPOSITORY }}"
             export LMZJ_DEPLOY_PATH="${{ secrets.PROD_DEPLOY_PATH }}"
-            echo "${{ secrets.LMZJ_REGISTRY_PASSWORD }}" | docker login "${LMZJ_REGISTRY}" -u "${{ secrets.LMZJ_REGISTRY_USERNAME }}" --password-stdin
+            echo "${{ secrets.ALIYUN_ACR_PASSWORD }}" | docker login "${ACR_REGISTRY}" -u "${{ secrets.ALIYUN_ACR_USERNAME }}" --password-stdin
             bash "${LMZJ_DEPLOY_PATH}/scripts/deploy-images.sh"
 
       - name: Deploy summary

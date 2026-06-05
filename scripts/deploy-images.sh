@@ -5,24 +5,29 @@
 # from the company registry and recreates the stack with a parameterized
 # production compose file. See lmzj-docs/ai-devops-operating-handbook.md.
 #
+# Both services share one Aliyun ACR repository, differentiated by a service
+# tag prefix: <repository>:api-<sha> and <repository>:cook-web-<sha>.
+#
 # Required environment variables:
-#   LMZJ_IMAGE_TAG        Full 40-char commit SHA to deploy.
-#   LMZJ_REGISTRY         Registry host (e.g. registry.cn-beijing.aliyuncs.com).
-#   LMZJ_IMAGE_NAMESPACE  Namespace/repo prefix (e.g. ai-shifu).
-#   LMZJ_DEPLOY_PATH      Directory holding docker-compose.prod.yml and .env.
+#   LMZJ_IMAGE_TAG    Full 40-char commit SHA to deploy.
+#   ACR_REGISTRY      Registry host (e.g. registry.cn-chengdu.aliyuncs.com).
+#   ACR_NAMESPACE     ACR namespace (e.g. lmzjai).
+#   ACR_REPOSITORY    ACR repository shared by both images (e.g. ragflow-lmzj).
+#   LMZJ_DEPLOY_PATH  Directory holding docker-compose.prod.yml and .env.
 # Optional:
-#   LMZJ_API_IMAGE_NAME       Default: lmzj-ai-shifu-api
-#   LMZJ_COOK_WEB_IMAGE_NAME  Default: lmzj-ai-shifu-cook-web
+#   API_TAG_PREFIX       Default: api
+#   COOK_WEB_TAG_PREFIX  Default: cook-web
 
 set -euo pipefail
 
 : "${LMZJ_IMAGE_TAG:?LMZJ_IMAGE_TAG (full 40-char SHA) is required}"
-: "${LMZJ_REGISTRY:?LMZJ_REGISTRY is required}"
-: "${LMZJ_IMAGE_NAMESPACE:?LMZJ_IMAGE_NAMESPACE is required}"
+: "${ACR_REGISTRY:?ACR_REGISTRY is required}"
+: "${ACR_NAMESPACE:?ACR_NAMESPACE is required}"
+: "${ACR_REPOSITORY:?ACR_REPOSITORY is required}"
 : "${LMZJ_DEPLOY_PATH:?LMZJ_DEPLOY_PATH is required}"
 
-API_IMAGE_NAME="${LMZJ_API_IMAGE_NAME:-lmzj-ai-shifu-api}"
-COOK_WEB_IMAGE_NAME="${LMZJ_COOK_WEB_IMAGE_NAME:-lmzj-ai-shifu-cook-web}"
+API_TAG_PREFIX="${API_TAG_PREFIX:-api}"
+COOK_WEB_TAG_PREFIX="${COOK_WEB_TAG_PREFIX:-cook-web}"
 
 # Reject non-immutable tags. Production only accepts a full 40-char commit SHA.
 if [[ ! "${LMZJ_IMAGE_TAG}" =~ ^[0-9a-f]{40}$ ]]; then
@@ -30,8 +35,9 @@ if [[ ! "${LMZJ_IMAGE_TAG}" =~ ^[0-9a-f]{40}$ ]]; then
   exit 1
 fi
 
-API_IMAGE="${LMZJ_REGISTRY}/${LMZJ_IMAGE_NAMESPACE}/${API_IMAGE_NAME}:${LMZJ_IMAGE_TAG}"
-COOK_WEB_IMAGE="${LMZJ_REGISTRY}/${LMZJ_IMAGE_NAMESPACE}/${COOK_WEB_IMAGE_NAME}:${LMZJ_IMAGE_TAG}"
+IMAGE_REPO="${ACR_REGISTRY}/${ACR_NAMESPACE}/${ACR_REPOSITORY}"
+API_IMAGE="${IMAGE_REPO}:${API_TAG_PREFIX}-${LMZJ_IMAGE_TAG}"
+COOK_WEB_IMAGE="${IMAGE_REPO}:${COOK_WEB_TAG_PREFIX}-${LMZJ_IMAGE_TAG}"
 
 echo "==> Deploying lmzj-ai-shifu @ ${LMZJ_IMAGE_TAG}"
 echo "    API:      ${API_IMAGE}"

@@ -52,9 +52,12 @@ Issue (#)
 
 ## 镜像与 registry
 
-- 公司镜像名默认：`lmzj-ai-shifu-api`、`lmzj-ai-shifu-cook-web`。
-- registry / namespace 由 GitHub Variables 提供，凭据由 Secrets 提供（见下）。
-- 生产镜像 tag **只用完整 40 位 commit SHA**，不使用 `latest` 或短 SHA。
+- registry 为 Aliyun ACR：`${ACR_REGISTRY}/${ACR_NAMESPACE}/${ACR_REPOSITORY}`。
+- 两个服务**共用一个 repository**，按服务前缀区分 tag：
+  - api：`${ACR_REPOSITORY}:api-<40位SHA>`
+  - cook-web：`${ACR_REPOSITORY}:cook-web-<40位SHA>`
+- registry / namespace / repository 由 GitHub Variables 提供，凭据由 Secrets 提供（见下）。
+- 生产镜像 tag **始终内嵌完整 40 位 commit SHA**，不使用 `latest` 或短 SHA。部署输入仍为纯 40 位 SHA，镜像 tag 由部署脚本按服务前缀派生。
 
 ## 需要人类在 GitHub 配置的 L4 平台门禁
 
@@ -77,17 +80,20 @@ Issue (#)
 
 ### Repository Secrets / Variables
 
-| 类型 | 名称 | 用途 |
-|---|---|---|
-| Variable | `LMZJ_REGISTRY` | 镜像 registry host |
-| Variable | `LMZJ_IMAGE_NAMESPACE` | 镜像 namespace |
-| Secret | `LMZJ_REGISTRY_USERNAME` | registry 用户名 |
-| Secret | `LMZJ_REGISTRY_PASSWORD` | registry 密码/token |
-| Secret | `PROD_SSH_HOST` | 生产服务器地址 |
-| Secret | `PROD_SSH_PORT` | SSH 端口 |
-| Secret | `PROD_SSH_USER` | SSH 用户 |
-| Secret | `PROD_SSH_KEY` | SSH 私钥 |
-| Secret | `PROD_DEPLOY_PATH` | 服务器部署目录（含 `docker-compose.prod.yml` 与 `scripts/deploy-images.sh`） |
+镜像 registry 为 Aliyun ACR。实际已配置命名如下：
+
+| 类型 | 名称 | 示例值 | 用途 |
+|---|---|---|---|
+| Variable | `ACR_REGISTRY` | `registry.cn-chengdu.aliyuncs.com` | ACR registry host |
+| Variable | `ACR_NAMESPACE` | `lmzjai` | ACR namespace |
+| Variable | `ACR_REPOSITORY` | `ragflow-lmzj` | 两镜像共用的 ACR repository |
+| Secret | `ALIYUN_ACR_USERNAME` | — | ACR 用户名 |
+| Secret | `ALIYUN_ACR_PASSWORD` | — | ACR 密码/token |
+| Secret（production env） | `PROD_SSH_HOST` | — | 生产服务器地址 |
+| Secret（production env） | `PROD_SSH_PORT` | — | SSH 端口 |
+| Secret（production env） | `PROD_SSH_USER` | — | SSH 用户 |
+| Secret（production env） | `PROD_SSH_KEY` | — | SSH 私钥 |
+| Secret（production env） | `PROD_DEPLOY_PATH` | — | 服务器部署目录（含 `docker-compose.prod.yml` 与 `scripts/deploy-images.sh`） |
 
 凭据缺失时 `lmzj-build-images` 自动降级为 build-only（不 push），便于在配置完成前先验证构建。
 
