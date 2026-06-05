@@ -171,7 +171,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: ${{ env.PUSH == 'true' }}
           tags: ${{ env.PUSH == 'true' && format('{0}/{1}/{2}:{3}', env.ACR_REGISTRY, env.ACR_NAMESPACE, matrix.repository, github.sha) || '' }}
           labels: |
