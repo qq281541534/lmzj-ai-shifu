@@ -1,0 +1,26 @@
+---
+description: Company AI Issue-to-Production release governance for this secondary-development fork
+globs:
+  - .github/workflows/lmzj-*.yml
+  - lmzj-docs/**
+  - scripts/deploy-images.sh
+alwaysApply: false
+---
+
+# Cursor Rule: AI Issue To Production
+
+- All issue, PR, CI/CD, release, deployment, and rollback work uses the
+  `ai-issue-to-production` skill. If the framework cannot auto-load it, read
+  `company-ai-skills/skills/ai-issue-to-production/`.
+
+- This project is `secondary_development` + `public`, governance `L4`. Release
+  source and PR target are `dev`; `main` is the upstream `ai-shifu/ai-shifu`
+  sync baseline, not the company production source.
+
+- Production images build only from `dev`, tagged with the full 40-char commit
+  SHA. Never deploy `latest` or a short SHA. Server pulls images, never builds.
+
+- Keep company release/ops docs in `lmzj-docs/`, never in upstream `docs/`.
+
+- Use `Refs #<issue>` in PR bodies; never use Closes/Fixes/Resolves. PR merge
+  is not production deployment; deploy needs explicit human confirmation.

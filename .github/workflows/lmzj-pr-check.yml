@@ -1,0 +1,96 @@
+name: LMZJ PR Check
+
+# Company AI Issue-to-Production PR governance gate.
+# Layering: detect-change-scope -> process-check -> conditional runtime-check
+# -> stable final check (lmzj-pr-check) bound to branch protection.
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  detect-change-scope:
+    name: Detect change scope
+    runs-on: ubuntu-latest
+    outputs:
+      scope: ${{ steps.classify.outputs.scope }}
+      runtime_changed: ${{ steps.classify.outputs.runtime_changed }}
+      backend_changed: ${{ steps.classify.outputs.backend_changed }}
+      frontend_changed: ${{ steps.classify.outputs.frontend_changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Classify changed paths
+        id: classify
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          git fetch --quiet origin "${{ github.base_ref }}"
+          CHANGED="$(git diff --name-only "${BASE}...HEAD")"
+          echo "Changed files:"
+          echo "${CHANGED}"
+          echo "${CHANGED}" | python scripts/classify_change_scope.py >> "$GITHUB_OUTPUT"
+
+  process-check:
+    name: Process check
+    needs: detect-change-scope
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Lint PR body for AI process rules
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python scripts/ai_process_lint.py
+
+  runtime-check:
+    name: Runtime check
+    needs: detect-change-scope
+    if: needs.detect-change-scope.outputs.runtime_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate runtime manifests
+        run: |
+          set -e
+          if [ -f docker/docker-compose.yml ]; then
+            docker compose -f docker/docker-compose.yml config -q
+          fi
+          for df in src/api/Dockerfile src/cook-web/Dockerfile; do
+            if [ -f "$df" ]; then
+              echo "Found Dockerfile: $df"
+            fi
+          done
+          echo "Runtime manifest smoke check passed."
+
+  lmzj-pr-check:
+    name: lmzj-pr-check
+    needs: [detect-change-scope, process-check, runtime-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate required checks
+        run: |
+          echo "scope=${{ needs.detect-change-scope.outputs.scope }}"
+          echo "process-check=${{ needs.process-check.result }}"
+          echo "runtime-check=${{ needs.runtime-check.result }}"
+          if [ "${{ needs.detect-change-scope.result }}" != "success" ]; then
+            echo "detect-change-scope failed"; exit 1
+          fi
+          if [ "${{ needs.process-check.result }}" != "success" ]; then
+            echo "process-check failed"; exit 1
+          fi
+          # runtime-check is skipped for non-runtime changes; only fail on failure.
+          if [ "${{ needs.runtime-check.result }}" = "failure" ]; then
+            echo "runtime-check failed"; exit 1
+          fi
+          echo "All required PR checks passed."

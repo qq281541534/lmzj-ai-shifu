@@ -1,0 +1,63 @@
+name: LMZJ Deploy Production
+
+# Manual production deploy. Human-confirmed only. Accepts a full 40-char commit
+# SHA, rejects latest and short SHA. The server pulls immutable images and never
+# builds. The `production` environment carries required reviewers (L4) once
+# configured in GitHub settings.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Full 40-char commit SHA to deploy to production"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate deploy input
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject non-immutable tags
+        run: |
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [ "${TAG}" = "latest" ]; then
+            echo "ERROR: refusing to deploy 'latest'." >&2; exit 1
+          fi
+          if [[ ! "${TAG}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "ERROR: image_tag must be a full 40-char commit SHA, got '${TAG}'." >&2
+            exit 1
+          fi
+          echo "Validated production tag: ${TAG}"
+
+  deploy:
+    name: Deploy to production (pull-only)
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy over SSH (server pulls images, never builds)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SSH_HOST }}
+          port: ${{ secrets.PROD_SSH_PORT }}
+          username: ${{ secrets.PROD_SSH_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script_stop: true
+          script: |
+            export LMZJ_IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+            export ACR_REGISTRY="${{ vars.ACR_REGISTRY }}"
+            export ACR_NAMESPACE="${{ vars.ACR_NAMESPACE }}"
+            export LMZJ_DEPLOY_PATH="${{ secrets.PROD_DEPLOY_PATH }}"
+            echo "${{ secrets.ALIYUN_ACR_PASSWORD }}" | docker login "${ACR_REGISTRY}" -u "${{ secrets.ALIYUN_ACR_USERNAME }}" --password-stdin
+            bash "${LMZJ_DEPLOY_PATH}/scripts/deploy-images.sh"
+
+      - name: Deploy summary
+        run: |
+          echo "### 🚀 Production deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: \`${{ github.event.inputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Mode: pull-only (no build on server)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Rollback: re-run with the previous full SHA." >> "$GITHUB_STEP_SUMMARY"

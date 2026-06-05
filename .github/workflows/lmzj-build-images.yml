@@ -1,0 +1,196 @@
+name: LMZJ Build Images
+
+# Build immutable full-SHA production images from the company release source
+# (dev). Non-runtime changes skip registry login, build, and push. Production
+# images are tagged ONLY with the full 40-char commit SHA (never latest).
+
+on:
+  push:
+    branches:
+      - dev
+    # First-line non-runtime guard: pure docs/agent/process pushes never even
+    # trigger an image build. The scope classifier is the second line of
+    # defense for mixed changes.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "lmzj-docs/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".claude/**"
+      - ".cursor/**"
+      - ".trae/**"
+      - "skills/**"
+      - ".github/pull_request_template.md"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/labeler.yml"
+      - "scripts/ai_process_lint.py"
+      - "scripts/verify_image_build_source.py"
+      - "scripts/classify_change_scope.py"
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Full 40-char commit SHA on dev to build"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  detect-change-scope:
+    name: Detect change scope
+    runs-on: ubuntu-latest
+    outputs:
+      build_images: ${{ steps.classify.outputs.build_images }}
+      backend_changed: ${{ steps.classify.outputs.backend_changed }}
+      frontend_changed: ${{ steps.classify.outputs.frontend_changed }}
+      scope: ${{ steps.classify.outputs.scope }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Classify changed paths
+        id: classify
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BEFORE="$(git rev-parse '${{ github.event.inputs.sha }}^' 2>/dev/null || echo '')"
+          else
+            BEFORE="${{ github.event.before }}"
+          fi
+          if [ -z "${BEFORE}" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            echo "No usable base commit; classifying conservatively as runtime."
+            printf 'scope=unknown\nruntime_changed=true\nbackend_changed=true\nfrontend_changed=true\nbuild_images=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED="$(git diff --name-only "${BEFORE}" "${GITHUB_SHA}")"
+          echo "Changed files:"; echo "${CHANGED}"
+          echo "${CHANGED}" | python scripts/classify_change_scope.py >> "$GITHUB_OUTPUT"
+
+  verify-source:
+    name: Verify image build source
+    needs: detect-change-scope
+    if: needs.detect-change-scope.outputs.build_images == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Confirm commit landed via merged PR on dev
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/verify_image_build_source.py --sha "${GITHUB_SHA}" --release-source dev
+
+  build:
+    name: Build (${{ matrix.service_name }})
+    needs: [detect-change-scope, verify-source]
+    if: needs.detect-change-scope.outputs.build_images == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service_name: api
+            repository: api-lmzj
+            dockerfile: src/api/Dockerfile
+          - service_name: cook-web
+            repository: cook-web-lmzj
+            dockerfile: src/cook-web/Dockerfile
+    env:
+      ACR_REGISTRY: ${{ vars.ACR_REGISTRY }}
+      ACR_NAMESPACE: ${{ vars.ACR_NAMESPACE }}
+      ALIYUN_ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
+      ALIYUN_ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+    steps:
+      - name: Skip unaffected service
+        id: gate
+        env:
+          BACKEND_CHANGED: ${{ needs.detect-change-scope.outputs.backend_changed }}
+          FRONTEND_CHANGED: ${{ needs.detect-change-scope.outputs.frontend_changed }}
+          SERVICE: ${{ matrix.service_name }}
+        run: |
+          if [ "${SERVICE}" = "api" ]; then
+            AFFECTED="${BACKEND_CHANGED}"
+          else
+            AFFECTED="${FRONTEND_CHANGED}"
+          fi
+          if [ "${AFFECTED}" = "true" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Service ${SERVICE} not affected; skipping."
+          fi
+
+      - name: Check out repository
+        if: steps.gate.outputs.build == 'true'
+        uses: actions/checkout@v6
+
+      - name: Resolve push mode
+        if: steps.gate.outputs.build == 'true'
+        run: |
+          if [ -n "${ACR_REGISTRY}" ] && [ -n "${ACR_NAMESPACE}" ] && \
+             [ -n "${ALIYUN_ACR_USERNAME}" ] && [ -n "${ALIYUN_ACR_PASSWORD}" ]; then
+            echo "PUSH=true" >> "$GITHUB_ENV"
+          else
+            echo "⚠️ Registry vars/secrets missing; build-only mode (no push)."
+            echo "PUSH=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up QEMU
+        if: steps.gate.outputs.build == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.gate.outputs.build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Aliyun ACR
+        if: steps.gate.outputs.build == 'true' && env.PUSH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: ${{ env.ALIYUN_ACR_USERNAME }}
+          password: ${{ env.ALIYUN_ACR_PASSWORD }}
+
+      - name: Build and push immutable full-SHA image
+        if: steps.gate.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ env.PUSH == 'true' && format('{0}/{1}/{2}:{3}', env.ACR_REGISTRY, env.ACR_NAMESPACE, matrix.repository, github.sha) || '' }}
+          labels: |
+            ai-shifu.project=lmzj-ai-shifu
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build summary
+        if: steps.gate.outputs.build == 'true'
+        run: |
+          echo "### 🐳 lmzj ${{ matrix.service_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: \`${{ env.ACR_REGISTRY }}/${{ env.ACR_NAMESPACE }}/${{ matrix.repository }}:${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: \`${{ github.sha }}\` (full SHA only, no latest)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Push: \`${{ env.PUSH }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  skipped:
+    name: Image build skipped (non-runtime)
+    needs: detect-change-scope
+    if: needs.detect-change-scope.outputs.build_images != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report skip
+        run: |
+          echo "### ⏭️ Image build skipped" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Scope: \`${{ needs.detect-change-scope.outputs.scope }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Non-runtime change: no registry login, build, or push." >> "$GITHUB_STEP_SUMMARY"
