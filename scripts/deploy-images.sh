@@ -5,8 +5,8 @@
 # from the company registry and recreates the stack with a parameterized
 # production compose file. See lmzj-docs/ai-devops-operating-handbook.md.
 #
-# Each service has its own Aliyun ACR repository, named <service>-lmzj, tagged
-# with the full commit SHA: api-lmzj:<sha> and cook-web-lmzj:<sha>.
+# Each service has its own Aliyun ACR repository tagged with the full commit
+# SHA: ai-shifu-api:<sha> and ai-shifu-cook-web:<sha>.
 #
 # Required environment variables:
 #   LMZJ_IMAGE_TAG    Full 40-char commit SHA to deploy.
@@ -14,8 +14,8 @@
 #   ACR_NAMESPACE     ACR namespace (e.g. lmzjai).
 #   LMZJ_DEPLOY_PATH  Directory holding docker-compose.prod.yml and .env.
 # Optional:
-#   API_REPOSITORY       Default: api-lmzj
-#   COOK_WEB_REPOSITORY  Default: cook-web-lmzj
+#   API_REPOSITORY       Default: ai-shifu-api
+#   COOK_WEB_REPOSITORY  Default: ai-shifu-cook-web
 
 set -euo pipefail
 
@@ -24,8 +24,8 @@ set -euo pipefail
 : "${ACR_NAMESPACE:?ACR_NAMESPACE is required}"
 : "${LMZJ_DEPLOY_PATH:?LMZJ_DEPLOY_PATH is required}"
 
-API_REPOSITORY="${API_REPOSITORY:-api-lmzj}"
-COOK_WEB_REPOSITORY="${COOK_WEB_REPOSITORY:-cook-web-lmzj}"
+API_REPOSITORY="${API_REPOSITORY:-ai-shifu-api}"
+COOK_WEB_REPOSITORY="${COOK_WEB_REPOSITORY:-ai-shifu-cook-web}"
 
 # Reject non-immutable tags. Production only accepts a full 40-char commit SHA.
 if [[ ! "${LMZJ_IMAGE_TAG}" =~ ^[0-9a-f]{40}$ ]]; then

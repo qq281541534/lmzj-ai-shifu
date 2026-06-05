@@ -52,14 +52,17 @@ Issue (#)
 
 ## 镜像与 registry
 
-- registry 为 Aliyun ACR：`${ACR_REGISTRY}/${ACR_NAMESPACE}/<service>-lmzj`。
-- 命名规范：**每个服务一个独立 repository**，名为 `服务-lmzj`：
-  - api：`api-lmzj:<40位SHA>`
-  - cook-web：`cook-web-lmzj:<40位SHA>`
-- registry / namespace 由 GitHub Variables 提供；repository 名由 workflow 按规范固定（`api-lmzj`、`cook-web-lmzj`）。凭据由 Secrets 提供（见下）。
+- registry 为 Aliyun ACR：`${ACR_REGISTRY}/${ACR_NAMESPACE}/<repository>`。
+- **每个服务一个独立 repository**：
+  - api：`ai-shifu-api:<40位SHA>`
+  - cook-web：`ai-shifu-cook-web:<40位SHA>`
+- registry / namespace 由 GitHub Variables 提供；repository 名由 workflow matrix 固定（`ai-shifu-api`、`ai-shifu-cook-web`）。凭据由 Secrets 提供（见下）。
 - 生产镜像 tag **只用完整 40 位 commit SHA**，不使用 `latest` 或短 SHA。
+- ACR namespace `lmzjai` 下的 `ai-shifu-api`、`ai-shifu-cook-web` 仓库在首次 push 时自动创建，无需手动建。
 
-需在 Aliyun ACR namespace `lmzjai` 下创建两个 repository：`api-lmzj`、`cook-web-lmzj`。
+### 手动构建（验证 / 重建）
+
+`lmzj-build-images` 支持手动触发：`Actions -> LMZJ Build Images -> Run workflow`，`force_build` 默认 `true`，会从当前 `dev` HEAD 全量构建并 push 两个服务镜像。手动构建仅作用于 `workflow_dispatch`，不改变 push 自动流程的 non-runtime 跳过行为与任何治理关口。
 
 ## 需要人类在 GitHub 配置的 L4 平台门禁
 
