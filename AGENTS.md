@@ -69,3 +69,9 @@ to.
 - `SKILL.md` is the repository-level skill routing index.
 - `src/api/SKILL.md` owns backend workflow skills.
 - `src/cook-web/SKILL.md` owns frontend workflow skills.
+- For any issue, PR, CI/CD, release, deployment, or rollback work, use the
+  `ai-issue-to-production` skill. This fork is `secondary_development` +
+  `public` (governance `L4`): release source and PR target are `dev`, `main`
+  is the upstream sync baseline, and company release/ops docs live in
+  `lmzj-docs/`. See `.claude/rules/global/ai-issue-to-production.md` and
+  `lmzj-docs/github-ai-build-release-flow.md`.
